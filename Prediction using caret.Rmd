@@ -1,0 +1,19 @@
+---
+title: "Covid-19 prediction"
+author: "Kirill Setdekov"
+date: "12 04 2020"
+output:
+  html_document:
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages
+```{r libload, message=FALSE, warning=FALSE}
+library(caret)
+library(dplyr)
+```
+
