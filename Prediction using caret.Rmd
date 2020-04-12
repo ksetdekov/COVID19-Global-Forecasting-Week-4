@@ -15,5 +15,95 @@ Load packages
 ```{r libload, message=FALSE, warning=FALSE}
 library(caret)
 library(dplyr)
+library(readr)
 ```
+
+Load data
+```{r loaddata}
+enriched <-
+        read_csv("input/covid19-enriched-dataset-week-2/enriched_covid_19_week_2.csv")
+head(enriched[, 1:10])
+test <-
+        read_csv("input/covid19-global-forecasting-week-4/test.csv",
+                 col_types = cols(Date = col_date(format = "%Y-%m-%d")))
+submission <-
+        read_csv("input/covid19-global-forecasting-week-4/submission.csv")
+train <-
+        read_csv("input/covid19-global-forecasting-week-4/train.csv")
+head(test)
+head(train)
+```
+take a look at Russia
+```{r}
+enriched %>% filter(Country_Region == "Russia") %>% View()
+enriched_countries <- enriched$Country_Region %>% unique()
+train_countries <- train$Country_Region %>% unique() 
+train_countries_df <- data.frame(train_countries)
+train_countries_df <- train_countries_df %>% mutate(isinenriched = ifelse(train_countries %in% enriched_countries,1,0))
+```
+Data is constant over time. We can leftjoin in to the train data and replicate the last row
+
+Need data transformation:
+4 countries are more detailed in enriched data
+* Australia - all values aggreaged over regions, starting with Australia
+* Canada - all values aggreaged over regions, starting with Canada
+* China - all values aggreaged over regions, starting with China
+* US - all values aggreaged over regions, starting with US
+
+```{r aggregation, message=FALSE, warning=FALSE}
+australia_names <- enriched_countries[9:16]
+australia_enriched <- enriched %>% filter(Country_Region %in% australia_names)
+australia_enriched <- australia_enriched %>% group_by(Date) %>% summarise_all(mean)
+australia_enriched$Country_Region = "Australia"
+
+canada_names <- enriched_countries[37:46]
+canada_enriched <- enriched %>% filter(Country_Region %in% canada_names)
+canada_enriched <- canada_enriched %>% group_by(Date) %>% summarise_all(mean)
+canada_enriched$Country_Region = "Canada"
+
+china_names <- enriched_countries[50:82]
+china_enriched <- enriched %>% filter(Country_Region %in% china_names)
+china_enriched <- china_enriched %>% group_by(Date) %>% summarise_all(mean)
+china_enriched$Country_Region = "China"
+
+us_names <- enriched_countries[225:278]
+us_enriched <- enriched %>% filter(Country_Region %in% us_names)
+us_enriched <- us_enriched %>% group_by(Date) %>% summarise_all(mean)
+us_enriched$Country_Region = "US"
+```
+
+# replace region data with aggregate
+```{r}
+enriched_aggregated <-
+        enriched %>% filter(!((Country_Region %in% us_names) |
+                                      (Country_Region %in% china_names) |
+                                      (Country_Region %in% canada_names) |
+                                      (Country_Region %in% australia_names)
+        ))
+
+enriched_aggregated <-
+        bind_rows(
+                enriched_aggregated,
+                australia_enriched,
+                canada_enriched,
+                china_enriched,
+                us_enriched
+        )
+```
+
+
+11 are missing, will immute with knn
+
+* Botswana
+* Burma
+* Burundi
+* Kosovo
+* MS Zaandam	
+* Malawi
+* Sao Tome and Principe
+* Sierra Leone
+* South Sudan
+* West Bank and Gaza
+* Western Sahara
+
 
