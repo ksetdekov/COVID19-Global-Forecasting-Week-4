@@ -16,6 +16,8 @@ Load packages
 library(caret)
 library(dplyr)
 library(readr)
+library(party)
+require(randomForest)
 ```
 
 Load data
@@ -102,10 +104,11 @@ enrich <- function(df, enriched, enriched_last_date) {
 train <- enrich(train, enriched, enriched_last_date)
 test <- enrich(test, enriched, enriched_last_date)
 
+
 ```
 
 
-11 are missing, will immute with knn
+11 are missing, will impute with knnImpute
 
 * Botswana
 * Burma
@@ -119,4 +122,43 @@ test <- enrich(test, enriched, enriched_last_date)
 * West Bank and Gaza
 * Western Sahara
 
+```{r}
+# Use the imputation model to predict the values of missing data points
+train_toedit <- as.data.frame(train[,7:38])
+d <- preProcess(train_toedit, "medianImpute")
+x1 <- predict(d, train_toedit)
+train[,7:38] <- x1
+
+test_toedit <- as.data.frame(test[,5:36])
+x2 <- predict(d, test_toedit)
+test[,5:36] <- x2
+rm(x1, x2, test_toedit, train_toedit, d)
+
+
+#generate date of first case
+first_date <- train %>% group_by(Country_Region, Province_State) %>% select(ConfirmedCases, Fatalities, Date) %>% filter(ConfirmedCases >0) %>% summarise(date_1 = min(Date))
+train <- left_join(train,first_date) %>% mutate(days_epi = ifelse(Date-date_1 >0, Date-date_1 ,0)) %>% select(-date_1)
+test <- left_join(test,first_date) %>% mutate(days_epi = ifelse(Date-date_1 >0, Date-date_1 ,0)) %>% select(-date_1)
+
+
+train <- train %>% mutate(region = as.factor(paste0(Country_Region,Province_State)), ConfirmedCases = log(ConfirmedCases+1), Fatalities = log(Fatalities + 1))
+test <- test %>% mutate(region = as.factor(paste0(Country_Region,Province_State)))
+
+train_stub <- train[,5:40]
+test_stub <- test[,5:38]
+```
+
+#modelling
+```{r}
+
+mod1 <- train(ConfirmedCases~., method ="glm", data = train_stub[,c(1,3:36)])
+mod2 <- train(ConfirmedCases~., method ="rf", data = train_stub[,c(1,3:36)], trControl = trainControl(method = "cv"),number = 3)
+mod3 <- train(ConfirmedCases~., method ="rpart", data = train_stub[,c(1,3:36)])
+mod4 <- train(ConfirmedCases~., method ="ctree", data = train_stub[,c(1,3:36)])
+# mod5 <- mob(ConfirmedCases |.,data = as.data.frame(train_stub[,c(1,3:36)]))
+mod6 <- train(ConfirmedCases~., method = "lm", data = train_stub[,c(1,3:36)])
+
+pred1 <- predict(mod6, train_stub[train_stub$region=="RussiaNA",c(1,3:36)])
+qplot(ConfirmedCases,pred1, data = train_stub[train_stub$region=="RussiaNA",])
+```
 
