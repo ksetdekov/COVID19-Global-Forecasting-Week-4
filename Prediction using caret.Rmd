@@ -35,7 +35,7 @@ head(train)
 ```
 take a look at Russia
 ```{r}
-enriched %>% filter(Country_Region == "Russia") %>% View()
+enriched %>% filter(Country_Region == "Russia") %>% head()
 enriched_countries <- enriched$Country_Region %>% unique()
 train_countries <- train$Country_Region %>% unique() 
 train_countries_df <- data.frame(train_countries)
@@ -52,43 +52,56 @@ Need data transformation:
 
 ```{r aggregation, message=FALSE, warning=FALSE}
 australia_names <- enriched_countries[9:16]
-australia_enriched <- enriched %>% filter(Country_Region %in% australia_names)
-australia_enriched <- australia_enriched %>% group_by(Date) %>% summarise_all(mean)
-australia_enriched$Country_Region = "Australia"
+enriched$Country_Region[enriched$Country_Region %in% australia_names] <- "Australia"
 
 canada_names <- enriched_countries[37:46]
-canada_enriched <- enriched %>% filter(Country_Region %in% canada_names)
-canada_enriched <- canada_enriched %>% group_by(Date) %>% summarise_all(mean)
-canada_enriched$Country_Region = "Canada"
+enriched$Country_Region[enriched$Country_Region %in% canada_names] <- "Canada"
+
 
 china_names <- enriched_countries[50:82]
-china_enriched <- enriched %>% filter(Country_Region %in% china_names)
-china_enriched <- china_enriched %>% group_by(Date) %>% summarise_all(mean)
-china_enriched$Country_Region = "China"
+enriched$Country_Region[enriched$Country_Region %in% china_names] <- "China"
+
 
 us_names <- enriched_countries[225:278]
-us_enriched <- enriched %>% filter(Country_Region %in% us_names)
-us_enriched <- us_enriched %>% group_by(Date) %>% summarise_all(mean)
-us_enriched$Country_Region = "US"
+enriched$Country_Region[enriched$Country_Region %in% us_names] <- "US"
+
+
+uk_names <- enriched_countries[282:287]
+enriched$Country_Region[enriched$Country_Region %in% uk_names] <- "United Kingdom"
+
+enriched$Country_Region[enriched$Country_Region %in% enriched_countries[109:117]] <- "France"
+
+enriched$Country_Region[enriched$Country_Region %in% enriched_countries[92:93]] <- "Denmark"
+enriched$Country_Region[enriched$Country_Region %in% enriched_countries[174:176]] <- "Netherlands"
+
+
+# what dates we have?
+enriched %>% group_by(Country_Region, Province_State) %>% select(Date) %>% summarise(max = max(Date), min = min(Date))
+train %>% group_by(Country_Region, Province_State) %>% select(Date) %>% summarise(max = max(Date), min = min(Date))
+test %>% group_by(Country_Region, Province_State) %>% select(Date) %>% summarise(max = max(Date), min = min(Date))
+
+enriched <- enriched %>% select(-c("Id", "ConfirmedCases", "Fatalities"))
+enriched_last_date <- enriched %>% filter(Date =="2020-03-25")
+enriched_last_date <- enriched_last_date %>% select(-c("Date"))
+
+rm(train_countries, train_countries_df, australia_names, canada_names, china_names, enriched_countries, train_countries, uk_names, us_names)
 ```
 
-# replace region data with aggregate
+# join enriched data to train and test
 ```{r}
-enriched_aggregated <-
-        enriched %>% filter(!((Country_Region %in% us_names) |
-                                      (Country_Region %in% china_names) |
-                                      (Country_Region %in% canada_names) |
-                                      (Country_Region %in% australia_names)
-        ))
+enrich <- function(df, enriched, enriched_last_date) {
+        require(dplyr)
+  p1 <- left_join(df, enriched, by = c("Province_State", "Country_Region", "Date"))
+  p2 <- left_join(df, enriched_last_date, by = c("Province_State", "Country_Region"))
+  p1 <- p1 %>% filter(Date <= "2020-03-25")
+  p2 <- p2 %>% filter(Date > "2020-03-25")
+  df <- bind_rows(p1,p2)
+  rm(p1,p2)
+  return(df)
+}
+train <- enrich(train, enriched, enriched_last_date)
+test <- enrich(test, enriched, enriched_last_date)
 
-enriched_aggregated <-
-        bind_rows(
-                enriched_aggregated,
-                australia_enriched,
-                canada_enriched,
-                china_enriched,
-                us_enriched
-        )
 ```
 
 
